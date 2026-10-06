@@ -28,10 +28,69 @@ fine-tuned model handles routine fields, and an LLM handles reasoning-heavy or
 low-confidence cases through a router. Results are reported for the baseline,
 the fine-tuned model, the LLM, and the hybrid.
 
+## Getting started
+
+This sets up the local environment for data collection, cleaning, and labeling.
+Model training runs in Google Colab and has its own setup, so no deep learning
+libraries are installed here.
+
+**You need:** Git, plus either [uv](https://docs.astral.sh/uv/) (recommended) or
+Python 3.12. With uv, the setup script downloads the right Python for you.
+
+1. Clone the repository and move into it.
+
+   ```
+   git clone https://github.com/Erdos-Projects/fall-2026-artist-opportunity-finder.git
+   cd fall-2026-artist-opportunity-finder
+   ```
+
+2. Run the setup script for your system from the project folder.
+
+   Windows (PowerShell):
+
+   ```powershell
+   .\scripts\setup.ps1
+   ```
+
+   Linux or macOS:
+
+   ```bash
+   source scripts/setup.sh
+   ```
+
+   The script creates a virtual environment in `.venv`, installs the packages in
+   [requirements.txt](requirements.txt), creates the `data` folders, and leaves
+   the environment active in your terminal. It is safe to run again, for example
+   after `requirements.txt` changes.
+
+3. In later sessions, activate the environment before you work.
+
+   Windows (PowerShell):
+
+   ```powershell
+   .venv\Scripts\Activate.ps1
+   ```
+
+   Linux or macOS:
+
+   ```bash
+   source .venv/bin/activate
+   ```
+
+   Run `deactivate` to leave it.
+
+If PowerShell refuses to run scripts, allow them for the current terminal and
+try again:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
 ## Repository layout (planned)
 
 ```
 /data        raw, clean, and labeled listings (not checked in)
+/scripts     environment setup scripts
 /scrapers    one module per source
 /labeling    labeling guide, Label Studio config, pre-label scripts
 /models      extraction, quality, and matching components

@@ -24,10 +24,10 @@ credentials*.json
 .ipynb_checkpoints/
 
 # Data: raw scraped listings are never republished, cleaned and labeled sets stay local
-[Dd]ata/raw/
-[Dd]ata/clean/
-[Dd]ata/labeled/
-![Dd]ata/**/.gitkeep
+[Dd]ata/raw/*
+[Dd]ata/clean/*
+[Dd]ata/labeled/*
+![Dd]ata/*/.gitkeep
 .cache/
 *.sqlite
 *.db

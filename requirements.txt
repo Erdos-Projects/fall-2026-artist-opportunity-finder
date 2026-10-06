@@ -1,0 +1,14 @@
+# Local environment: data collection, cleaning, and labeling (Part A).
+# Deep learning libraries are not listed here. Training runs in Google Colab,
+# which has its own setup (see Plans/component-1-local-and-colab-plan.md).
+
+# Scraping
+requests
+beautifulsoup4
+lxml
+
+# Cleaning and inspection
+pandas
+
+# Labeling
+label-studio
