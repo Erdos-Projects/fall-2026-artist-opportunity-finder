@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+credentials*.json
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data: raw scraped listings are never republished, cleaned and labeled sets stay local
+[Dd]ata/raw/
+[Dd]ata/clean/
+[Dd]ata/labeled/
+![Dd]ata/**/.gitkeep
+.cache/
+*.sqlite
+*.db
+
+# Model weights, checkpoints, and training logs
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.ckpt
+checkpoints/
+runs/
+wandb/
+mlruns/
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code local settings
+.claude/settings.local.json
