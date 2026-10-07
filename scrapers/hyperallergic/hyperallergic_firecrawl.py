@@ -7,8 +7,8 @@ This version also returns fees.
 Needs a Firecrawl API key as FIRECRAWL_API_KEY in the .env file at the project root.
 
 Usage (from the project root):
-    python scrapers/hyperallergic_firecrawl.py              # newest month only
-    python scrapers/hyperallergic_firecrawl.py --months 10  # newest 10 months
+    python scrapers/hyperallergic/hyperallergic_firecrawl.py              # newest month only
+    python scrapers/hyperallergic/hyperallergic_firecrawl.py --months 10  # newest 10 months
 
 Writes one line per opportunity to data/raw/hyperallergic_firecrawl.jsonl.
 Firecrawl's answers are saved in data/raw/_cache/hyperallergic_firecrawl so
@@ -28,7 +28,7 @@ from hyperallergic import collect_post_urls, resolve_url
 
 API_URL = "https://api.firecrawl.dev/v2/scrape"
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 CACHE_DIR = ROOT / "data" / "raw" / "_cache" / "hyperallergic_firecrawl"
 OUT_FILE = ROOT / "data" / "raw" / "hyperallergic_firecrawl.jsonl"
 

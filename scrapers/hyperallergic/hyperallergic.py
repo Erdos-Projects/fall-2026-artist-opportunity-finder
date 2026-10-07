@@ -1,8 +1,8 @@
 """Scrape Hyperallergic's monthly "Opportunities in <Month> <Year>" posts.
 
 Usage (from the project root):
-    python scrapers/hyperallergic.py              # newest 22 months
-    python scrapers/hyperallergic.py --months 3   # newest 3 months
+    python scrapers/hyperallergic/hyperallergic.py              # newest 22 months
+    python scrapers/hyperallergic/hyperallergic.py --months 3   # newest 3 months
 
 Writes one line per opportunity to data/raw/hyperallergic.jsonl, using the
 record format shared by all scrapers (see common.make_record). Downloaded pages
@@ -12,11 +12,16 @@ Months already in the output file are skipped.
 
 import argparse
 import re
+import sys
 import time
+from pathlib import Path
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+
+# common.py lives one folder up, in scrapers/.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from common import (
     CACHE_DIR,

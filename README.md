@@ -93,27 +93,103 @@ with the environment active (see Getting started).
 
 ### Hyperallergic
 
-Hyperallergic publishes a monthly "Opportunities in <Month> <Year>" post. This
-scraper reads the newest 30 of them and saves one line per opportunity (title,
-description, deadline, fees, website, and the original text) to
-`data/raw/hyperallergic.jsonl`.
+The Hyperallergic data is built in two steps, and the second depends on the
+first. Both write to `data/raw/`.
+
+| Step | Script | Writes | One line per |
+|---|---|---|---|
+| 1. Listings | `scrapers/hyperallergic/hyperallergic.py` | `hyperallergic.jsonl` | Opportunity |
+| 2. Opportunity pages | `scrapers/hyperallergic/fetch_opportunity_page.py` | `opportunity_pages.jsonl` | Linked page |
+
+**Step 1: the listings.** Hyperallergic publishes a monthly "Opportunities in
+<Month> <Year>" post. This scraper reads the newest 30 of them and saves one line
+per opportunity: title, description, deadline, fees, website, type, and the
+original text. Each listing's `website` is the link Hyperallergic gives for it,
+cleaned of tracking labels, and it usually points to the organizer's own page.
 
 Windows (PowerShell):
 
 ```powershell
-.venv\Scripts\python.exe scrapers\hyperallergic.py --months 30
+.venv\Scripts\python.exe scrapers\hyperallergic\hyperallergic.py --months 30
 ```
 
 Linux or macOS:
 
 ```bash
-.venv/bin/python scrapers/hyperallergic.py --months 30
+.venv/bin/python scrapers/hyperallergic/hyperallergic.py --months 30
 ```
 
 Downloaded pages are cached in `data/raw/_cache/hyperallergic`, and months that
 are already in the output file are skipped, so it is safe to run again. The first
 run takes a while because it waits a few seconds between requests. The scraper
 prints a note for any paragraph it could not read, so check those after a run.
+
+**Step 2: the opportunity pages.** The blurbs in Step 1 are only a sentence or
+two. The organizer's own page holds the long, messy text the extraction model has
+to learn from. This script reads the `website` links from `hyperallergic.jsonl`
+(and from `resartis.jsonl`, if it exists), removes repeated links, and saves the
+text of each page. It keeps only four keys per page: `source_url` (the cleaned
+link), `raw_text`, `published_at`, and `scraped_at`.
+
+It uses [Firecrawl](https://www.firecrawl.dev/), so put your key in a `.env` file
+in the project folder (copy `.env.example`):
+
+```
+FIRECRAWL_API_KEY=your-key-here
+```
+
+Run Step 1 first. Then run the script without `--scrape` to list the domains it
+would visit. This makes no requests and uses no credits.
+
+```powershell
+.venv\Scripts\python.exe scrapers\hyperallergic\fetch_opportunity_page.py
+```
+
+Each organizer has its own terms of use, which the script cannot read. Read the
+terms of the sites you are comfortable with, and add any that forbid automated
+access to `SKIP_DOMAINS` in the script. It checks robots.txt for you. Then fetch
+a few pages to check the result, and then all of them:
+
+```powershell
+.venv\Scripts\python.exe scrapers\hyperallergic\fetch_opportunity_page.py --scrape --limit 5
+.venv\Scripts\python.exe scrapers\hyperallergic\fetch_opportunity_page.py --scrape
+```
+
+On Linux or macOS, use `.venv/bin/python` and forward slashes. Each page costs
+about one Firecrawl credit. Pages already saved are skipped, so you can stop and
+run it again.
+
+**How the two files connect.** Each opportunity page is the page behind a
+listing's `website` link. The two files are joined on that link:
+
+```
+hyperallergic.jsonl     website     (listing: title, deadline, fees, ...)
+opportunity_pages.jsonl source_url  (page: raw_text)
+```
+
+Links to the same page can differ in small ways, such as `http` against `https`,
+`www.`, or a trailing slash, so do not compare them as plain text. Run both sides
+through `url_key` from `scrapers/common.py`, which gives the same key for the same
+page:
+
+```python
+import sys
+import pandas as pd
+
+sys.path.insert(0, "scrapers")
+from common import url_key
+
+listings = pd.read_json("data/raw/hyperallergic.jsonl", lines=True)
+pages = pd.read_json("data/raw/opportunity_pages.jsonl", lines=True)
+
+listings["key"] = listings["website"].map(url_key)
+pages["key"] = pages["source_url"].map(url_key)
+joined = listings.merge(pages, on="key", how="left", suffixes=("", "_page"))
+```
+
+Several listings can link to one page, so a page can match more than one listing.
+That is expected: in the next phase the listing's title, deadline, and fees can be
+searched for in the page text to help create labels.
 
 The data stays on your machine. Do not republish it.
 

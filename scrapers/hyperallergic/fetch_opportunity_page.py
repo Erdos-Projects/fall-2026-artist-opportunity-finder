@@ -1,51 +1,58 @@
 """Fetch each listing's organizer page as text, using Firecrawl.
 
 The Hyperallergic and Res Artis listings link to the organizer's own page. Those
-pages hold the long, messy text the extraction model has to learn from. Each
-page is saved with the fields its aggregator listed (title, deadline, fees), so
-they can be matched back into the page text when labeling.
+pages hold the long, messy text the extraction model has to learn from. Only the
+address and the text are saved. To get a listing's title, deadline, or fees, join
+this file to the listing's file on url_key (see common.py).
 
 Needs a Firecrawl API key as FIRECRAWL_API_KEY in the .env file at the project root.
 
 Usage (from the project root):
-    python scrapers/organizer_pages.py                    # list the domains, fetch nothing
-    python scrapers/organizer_pages.py --scrape --limit 5
-    python scrapers/organizer_pages.py --scrape
+    python scrapers/hyperallergic/fetch_opportunity_page.py                    # list the domains, fetch nothing
+    python scrapers/hyperallergic/fetch_opportunity_page.py --scrape --limit 5
+    python scrapers/hyperallergic/fetch_opportunity_page.py --scrape
 
 Each organizer has its own terms of use, and this script cannot read them.
 Run it without --scrape first, read the terms of the domains it lists, and add
 any that forbid automated access to SKIP_DOMAINS. It checks robots.txt for you.
 
 Text only (no LLM extraction), 1 credit per page. Writes one line per page to
-data/raw/organizer_pages.jsonl in the shared record format (see
-common.make_record). Pages already saved are skipped, and Firecrawl's answers
-are cached in data/raw/_cache/organizer_pages.
+data/raw/opportunity_pages.jsonl with four keys: source_url (the cleaned link),
+raw_text, published_at, and scraped_at. Pages already saved are skipped, and
+Firecrawl's answers are cached in data/raw/_cache/organizer_pages.
 """
 
 import argparse
 import hashlib
 import json
+import sys
 from collections import Counter
-from urllib.parse import urldefrag, urlparse
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
 import requests
+
+# common.py lives one folder up, in scrapers/.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from common import (
     CACHE_DIR,
     RAW_DIR,
     USER_AGENT,
     append_records,
+    clean_url,
     firecrawl_page,
     load_api_key,
     load_saved,
-    make_record,
     published_at,
+    url_key,
 )
 
 PARENT_FILES = [RAW_DIR / "hyperallergic.jsonl", RAW_DIR / "resartis.jsonl"]
 PAGE_CACHE = CACHE_DIR / "organizer_pages"
-OUT_FILE = RAW_DIR / "organizer_pages.jsonl"
+OUT_FILE = RAW_DIR / "opportunity_pages.jsonl"
 
 # Never fetched.
 SKIP_DOMAINS = {
@@ -89,19 +96,22 @@ def allowed_by_robots(url):
     return _robots[parts.netloc].can_fetch("*", url)
 
 
-def load_parents():
-    """Return {organizer url: the saved listing that links to it}, skipping links we never fetch."""
-    parents = {}
+def load_links():
+    """Return {url_key: cleaned url} for every link in the listing files.
+
+    Links to the same page, even with different tracking labels, share one
+    key, so each page is fetched once. Links we never fetch are left out.
+    """
+    links = {}
     for path in PARENT_FILES:
         if not path.exists():
             continue
         with path.open(encoding="utf-8") as f:
             for line in f:
-                row = json.loads(line)
-                url = urldefrag(row.get("website") or "")[0]
+                url = clean_url(json.loads(line).get("website") or "")
                 if url.startswith("http") and not is_skipped(url):
-                    parents.setdefault(url, row)
-    return parents
+                    links.setdefault(url_key(url), url)
+    return links
 
 
 def main():
@@ -110,9 +120,9 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="only fetch this many pages")
     args = parser.parse_args()
 
-    parents = load_parents()
-    domains = Counter(urlparse(url).netloc.lower().removeprefix("www.") for url in parents)
-    print(f"{len(parents)} organizer pages on {len(domains)} domains")
+    links = load_links()
+    domains = Counter(urlparse(url).netloc.lower().removeprefix("www.") for url in links.values())
+    print(f"{len(links)} organizer pages on {len(domains)} domains")
 
     if not args.scrape:
         print("Read each domain's terms of use before scraping. Most pages first:")
@@ -121,11 +131,11 @@ def main():
         return
 
     api_key = load_api_key()
-    saved = load_saved(OUT_FILE)
-    todo = [(url, row) for url, row in parents.items() if url not in saved][: args.limit]
+    saved = {url_key(url) for url in load_saved(OUT_FILE)}
+    todo = [url for key, url in links.items() if key not in saved][: args.limit]
     print(f"{len(todo)} to fetch")
 
-    for url, parent in todo:
+    for url in todo:
         if not allowed_by_robots(url):
             print(f"robots.txt says no  {url}")
             continue
@@ -137,20 +147,12 @@ def main():
             continue
 
         text = page.get("markdown", "")
-        record = make_record(
-            source="organizer",
-            source_url=url,
-            type=parent["type"],
-            title=parent["title"],
-            description=parent["description"],
-            deadline=parent["deadline"],
-            fees=parent["fees"],
-            website=url,
-            raw_text=text,
-            published_at=published_at(page),
-            listed_in=parent["source_url"],
-            listed_by=parent["source"],
-        )
+        record = {
+            "source_url": url,
+            "raw_text": text,
+            "published_at": published_at(page),
+            "scraped_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
         append_records(OUT_FILE, [record])
         note = "   (very short, maybe a form or an error page)" if len(text) < 300 else ""
         print(f"saved  {url}{note}")

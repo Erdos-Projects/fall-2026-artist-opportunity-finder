@@ -10,7 +10,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import requests
 from dotenv import load_dotenv
@@ -26,6 +26,9 @@ FIRECRAWL_URL = "https://api.firecrawl.dev/v2/scrape"
 SHORTENERS = {"bit.ly", "tinyurl.com", "t.co", "ow.ly", "buff.ly", "lnkd.in", "goo.gl", "is.gd", "rb.gy", "shorturl.at"}
 
 FEE_WORD = re.compile(r"\bfees?\b", re.I)
+
+# Labels added to links to track where a visitor came from. They never change the page.
+TRACKING_PARAMS = {"gclid", "gbraid", "wbraid", "gad_source", "gad_campaignid", "fbclid", "srsltid", "mc_cid", "mc_eid"}
 
 
 def make_record(
@@ -76,6 +79,35 @@ def _host(url):
     return urlparse(url).netloc.lower().removeprefix("www.")
 
 
+def clean_url(url):
+    """Remove the parts of a link that do not change which page it opens.
+
+    That is the #fragment (where to scroll on the page) and tracking labels
+    such as utm_source=..., gclid=..., or ref=hyperallergic.com.
+    """
+    if not url:
+        return url
+    parts = urlparse(url)
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if not key.lower().startswith("utm_")
+        and key.lower() not in TRACKING_PARAMS
+        and not (key.lower() == "ref" and "hyperallergic" in value.lower())
+    ]
+    return urlunparse(parts._replace(query=urlencode(query), fragment=""))
+
+
+def url_key(url):
+    """A form of a link for matching: the same page always gives the same key.
+
+    Use it to join two files on a link. It ignores http or https, "www.",
+    capital letters in the host, and a trailing slash.
+    """
+    parts = urlparse(clean_url(url))
+    return urlunparse(("https", parts.netloc.lower().removeprefix("www."), parts.path.rstrip("/") or "/", "", parts.query, ""))
+
+
 _resolved_file = CACHE_DIR / "resolved_links.json"
 _resolved = None
 
@@ -90,19 +122,19 @@ def resolve_url(url):
     global _resolved
     if not url:
         return url
-    # Hyperallergic adds this tracking tag to every outbound link.
-    url = re.sub(r"[?&]ref=hyperallergic\.com$", "", url)
+    # Hyperallergic adds tracking labels (utm_..., ref=...) to every outbound link.
+    url = clean_url(url)
     # An email security wrapper that holds the real address between "__" marks.
     wrapped = re.search(r"urldefense\.com/v3/__(.+?)__;", url)
     if wrapped:
-        return wrapped.group(1)
+        return clean_url(wrapped.group(1))
     if _host(url) not in SHORTENERS:
         return url
 
     if _resolved is None:
         _resolved = json.loads(_resolved_file.read_text(encoding="utf-8")) if _resolved_file.exists() else {}
     if url in _resolved:
-        return _resolved[url]
+        return clean_url(_resolved[url])
 
     final = url
     time.sleep(1)
@@ -118,6 +150,7 @@ def resolve_url(url):
     except requests.RequestException:
         pass
 
+    final = clean_url(final)
     _resolved[url] = final
     _resolved_file.parent.mkdir(parents=True, exist_ok=True)
     _resolved_file.write_text(json.dumps(_resolved, indent=1), encoding="utf-8")
