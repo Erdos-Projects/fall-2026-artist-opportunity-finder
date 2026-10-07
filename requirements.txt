@@ -7,6 +7,9 @@ requests
 beautifulsoup4
 lxml
 
+# API keys (reads .env)
+python-dotenv
+
 # Cleaning and inspection
 pandas
 
