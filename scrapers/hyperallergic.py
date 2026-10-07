@@ -35,6 +35,10 @@ DELAY_SECONDS = 3
 PAGE_CACHE = CACHE_DIR / "hyperallergic"
 OUT_FILE = RAW_DIR / "hyperallergic.jsonl"
 
+# "Deadline:", "Deadline & Fee:" (a short qualifier is allowed), or "Application Period:".
+DEADLINE_LABEL = re.compile(r"(?:Deadlines?[^:|\n]{0,20}|Application Period):\s*(?P<deadline>[^|]+)", re.I)
+YEAR = re.compile(r"\b20\d{2}\b")
+
 
 def type_from_heading(heading):
     """Map a section heading to one of our types.
@@ -92,31 +96,53 @@ def collect_post_urls(months):
 
 
 def parse_listing(paragraph):
-    """Turn one <p> into a dict of fields, or return None if it does not fit."""
+    """Turn one <p> into a dict of fields, or return None if it does not fit.
+
+    The usual layout is "title <br> description <br> Deadline: ... | link".
+    Three layouts seen in older posts are also handled, tried in this order:
+    1. A "Deadline:" or "Application Period:" label. The line break before the
+       label is sometimes missing, so the text after the title is searched as
+       one string and the last label in it is used.
+    2. A bare date before the "|" on the last line ("September 22, 2025 | link").
+    3. No date at all. The listing is kept with an empty deadline, but only if
+       the paragraph links somewhere, so a bold note is not mistaken for one.
+    """
     links = paragraph.find_all("a")
     link = links[-1]["href"] if links else None
+    link_text = links[-1].get_text(strip=True) if links else None
 
-    # A listing is "title <br> description <br> Deadline: ... | link".
     for br in paragraph.find_all("br"):
         br.replace_with("\n")
     raw_text = paragraph.get_text()
     lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+
+    # Promoted listings have a "Featured" line before the title. Drop it so the
+    # next line becomes the title. raw_text still keeps the word.
+    if lines and lines[0].lower() == "featured":
+        lines = lines[1:]
     if len(lines) < 2:
         return None
 
-    # The line break before "Deadline:" is sometimes missing, so search the
-    # text after the title as one string and use the last "Deadline:" in it.
-    # A short qualifier is allowed before the colon ("Deadline & Fee:").
     body = " ".join(lines[1:])
-    matches = list(re.finditer(r"Deadlines?[^:|\n]{0,20}:\s*(?P<deadline>[^|]+)", body))
-    if not matches:
+    matches = list(DEADLINE_LABEL.finditer(body))
+    if matches:
+        match = matches[-1]
+        description = body[: match.start()].strip()
+        deadline = match.group("deadline").strip()
+    elif len(lines) >= 3 and "|" in lines[-1] and YEAR.search(lines[-1].split("|")[0]):
+        description = " ".join(lines[1:-1])
+        deadline = lines[-1].split("|")[0].strip()
+    elif link:
+        # The last line is often just the link text, which is not description.
+        description = " ".join(lines[1:-1] if len(lines) >= 3 and lines[-1] == link_text else lines[1:])
+        deadline = None
+    else:
         return None
-    match = matches[-1]
 
     return {
         "title": lines[0],
-        "description": body[: match.start()].strip(),
-        "deadline": match.group("deadline").strip(),
+        "description": description,
+        "deadline": deadline,
         "link": link,
         "raw_text": raw_text,
     }
@@ -152,6 +178,10 @@ def parse_post(html):
         if listing is None:
             skipped.append(f"could not parse: {text[:80]}")
             continue
+        # A title that is a label, or very long, usually means the paragraph
+        # was split wrongly. It is kept, but flagged to be checked by hand.
+        if listing["title"].lower() in {"featured", "sponsored"} or len(listing["title"]) > 140:
+            skipped.append(f"suspicious title, kept: {listing['title'][:60]!r}")
         listing["type"] = current_type
         listings.append(listing)
     return listings, skipped, published_at
