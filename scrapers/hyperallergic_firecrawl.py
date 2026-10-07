@@ -4,7 +4,7 @@ Same job as hyperallergic.py, but instead of picking fields out of the HTML
 with BeautifulSoup, Firecrawl's LLM reads each post and returns the fields.
 This version also returns fees.
 
-Needs a Firecrawl API key in the FIRECRAWL_API_KEY environment variable.
+Needs a Firecrawl API key as FIRECRAWL_API_KEY in the .env file at the project root.
 
 Usage (from the project root):
     python scrapers/hyperallergic_firecrawl.py              # newest month only
@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
 from hyperallergic import collect_post_urls, resolve_url
 
@@ -111,9 +112,10 @@ def main():
     parser.add_argument("--months", type=int, default=1, help="how many monthly posts to scrape, newest first")
     args = parser.parse_args()
 
+    load_dotenv(ROOT / ".env")
     api_key = os.environ.get("FIRECRAWL_API_KEY")
     if not api_key:
-        raise SystemExit("Set the FIRECRAWL_API_KEY environment variable first.")
+        raise SystemExit("Add your key to the .env file as FIRECRAWL_API_KEY=...")
 
     done = load_done_posts()
     for post_url in collect_post_urls(args.months):
