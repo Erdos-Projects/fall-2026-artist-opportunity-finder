@@ -86,6 +86,37 @@ try again:
 Set-ExecutionPolicy -Scope Process Bypass
 ```
 
+## Building the datasets
+
+Each source has its own scraper in `scrapers/`. Run them from the project folder
+with the environment active (see Getting started).
+
+### Hyperallergic
+
+Hyperallergic publishes a monthly "Opportunities in <Month> <Year>" post. This
+scraper reads the newest 30 of them and saves one line per opportunity (title,
+description, deadline, fees, website, and the original text) to
+`data/raw/hyperallergic.jsonl`.
+
+Windows (PowerShell):
+
+```powershell
+.venv\Scripts\python.exe scrapers\hyperallergic.py --months 30
+```
+
+Linux or macOS:
+
+```bash
+.venv/bin/python scrapers/hyperallergic.py --months 30
+```
+
+Downloaded pages are cached in `data/raw/_cache/hyperallergic`, and months that
+are already in the output file are skipped, so it is safe to run again. The first
+run takes a while because it waits a few seconds between requests. The scraper
+prints a note for any paragraph it could not read, so check those after a run.
+
+The data stays on your machine. Do not republish it.
+
 ## Repository layout (planned)
 
 ```
