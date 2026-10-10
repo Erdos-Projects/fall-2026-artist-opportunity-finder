@@ -70,7 +70,7 @@ Date: October 7, 2026. Numbers below are from the last time they were checked.
 
 ## Week 1 - Session 2
 
-Date: October 10, 2026. This covers the work in `notebooks/EDA+Preprocessing.ipynb` since Session 1 (last edited October 9). The EDA is not finished.
+Date: October 10, 2026. This covers the work in `notebooks/EDA+Preprocessing.ipynb` since Session 1, as saved on October 10. The EDA checks are done, including the content analysis (whether a listing's deadline and fee also appear in its organizer page).
 
 ### What the notebook does, in order
 
@@ -79,33 +79,67 @@ Date: October 10, 2026. This covers the work in `notebooks/EDA+Preprocessing.ipy
 3. Makes `common.py` importable by adding `scrapers/` to the path, then uses `url_key` to give every link a matching key.
 4. Looks for text noise in the page text: invisible characters, odd spaces, extra blank lines. It explains why this matters: labels are character positions, so any change to the text after labeling shifts them.
 5. Adds a `domain` column (the organizer's site) and a `month` column (taken from the post address).
-6. Marks pages that are not usable text with `page_problem`.
-7. Joins listings to pages on the key, adds `has_page` and `page_usable`, and prints the funnel.
-8. Starts the EDA checks: completeness (blank percentages and field coverage by month), type balance (stacked bars by month), and listings per organizer.
+6. Marks pages that are not usable text with `page_problem`, then joins listings to pages on the key and adds `has_page` and `page_usable`.
+7. Runs the EDA checks: completeness, type balance (including each type's share per month), listings per organizer, text length, time and deadlines (with a `parse_deadline` function), duplicates (clusters by link and title similarity), and noise.
+8. Checks whether a listing's deadline and fee also appear in its organizer page, to see how many automatic labels are possible later (with a `parse_fees` function).
+9. Flags listings that look non-U.S. or not a grant, open call, or residency. Nothing is dropped.
 
-### Findings so far
+### Findings
 
-- **Missing values:** `fees` is blank for 313 of 407 listings (77%), and `deadline` for 7 (1.7%). Every other column is complete. The data types look fine for now.
-- **Organizer pages:** `published_at` is filled in for only 15 of the 251 pages. For time analysis, use the listing's own `published_at`.
-- **Text noise in the pages:** non-breaking spaces in 132 of 251 pages, zero-width characters in 17, runs of 2 or more spaces in 76, and 3 or more blank lines in a row in 102. There is no mojibake (garbled text from a wrong encoding).
-- **Unusable pages:** 25 of the 251 pages are not usable text: 14 "page not found", 7 with no listing words (login walls or banners), and 4 nearly empty. That leaves 226 usable pages.
-- **Join funnel:** 330 listings have a page and 301 have a usable one. The gap is 29 listings, not 25, because one page can serve several listings.
-- **Type balance:** Residency/Fellowship is the largest type (181), then Grant (125) and Open Call (101).
-- **Organizers that repeat:** the Silver Foundation has 8 listings, Center for Craft and apexart 7 each, and Foundwork 6. That is why the split must be by organizer.
+**Completeness**
+- `fees` is blank for 313 of 407 listings (77%), `deadline` for 7 (1.7%), and `description` for 1 (0.2%). Every other column is complete. A blank fee means no "fee" keyword was found, not that the listing is free.
+- `published_at` is filled in for only 15 of the 251 pages. For time analysis, use the listing's own `published_at`.
+
+**Organizer pages**
+- 25 of the 251 pages are not usable text: 14 "page not found", 7 with no listing words (login walls or banners), and 4 nearly empty. That leaves 226 usable pages.
+- 330 listings have a page and 301 have a usable one. The gap is 29 listings, not 25, because one page can serve several listings.
+
+**Type balance**
+- Residency/Fellowship is the largest type (181), then Grant (125) and Open Call (101).
+- In most months Residency/Fellowship has the biggest share, typically 40 to 55%. Grant leads in 2026-06 (tied with Open Call), 2026-07, and 2026-08. Three months (2025-05, 2025-06, 2025-08) are an even 33% split. A month has only 7 to 20 listings, so the shares swing a lot.
+- Organizers that repeat the most: the Silver Foundation (8 listings), Center for Craft and apexart (7 each), and Foundwork (6).
+
+**Text length**
+- Hyperallergic blurbs are about 240 characters, too short to train on.
+- The 226 usable pages have a median of about 6,980 characters, or about 1,023 estimated tokens (90th percentile 3,202). 78% are longer than 512 tokens, so pages must be split into chunks.
+
+**Time and deadlines**
+- 7 deadlines are missing. Every other one parses. 14 contain more than one date, and 2 are rolling.
+- 381 of the 400 deadlines were already past on October 7, 2026.
+- The median notice between the post date and the deadline is 30 days (25% at 20 days, 75% at 45, longest 155). 3 deadlines fall before the post date, which are year typos in the source.
+
+**Duplicates**
+- 66 titles repeat exactly, and 90 extra rows share a link with another listing.
+- Merging by link plus a similar title, or by a very similar title, gives 285 clusters from 407 rows (212 appear once, 45 twice, 18 three times, and the rest 4 to 8 times). 4 links are shared by listings that stay in separate clusters, for example apexart's open calls page.
+- A cluster can hold different years of one program (for example A.I.R. Gallery 2025 and 2026).
+
+**Noise**
+- Real noise is small: non-breaking spaces (163 listings' page text), zero-width characters (27), and curly quotes. No replacement characters or broken encoding.
+- 1 title is over 140 characters and 1 description is empty.
+
+**Making labels from the listing data**
+- Only 37% of deadlines (294 checked) are found in the organizer page text. The cause is timing: the pages were fetched in October 2026, so a page for an old listing usually shows the next cycle's dates. For deadlines since September 2026 the match rate is 74% (27 listings), against 33% for older ones.
+- Of the 94 listings with fee text, 88 have an amount, 76 are application fees, and 18 are other costs (artist, workshop, or program fees). Amounts are mostly $10 to $50, and 2 are in another currency. Only 38% of application fee amounts (55 checked) are found in the page text. The fee keyword match is noisy, so `fees` should not be used as a label without checking.
+
+**Scope flags**
+- 35 listings are flagged non-U.S. and 27 as an odd type (festival, workshop, commission, job). By type, the non-U.S. flags are Grant 14, Open Call 12, Residency/Fellowship 9, and the odd-type flags are Grant 3, Open Call 14, Residency/Fellowship 10. The keyword lists are rough, so a sample needs a hand check.
 
 ### Decisions and reasons
 
-- **Split train and test by organizer** (the `domain` column), not by listing. Organizers repeat their wording, so a model tested on an organizer it trained on would score higher than it should.
-- **Only usable pages** (`page_usable`) go into labeling, training, and text length estimates.
+- **Split train and test by organizer, and by cluster.** Organizers repeat their wording, so a model tested on an organizer it trained on would score higher than it should.
+- **Only usable pages** (`page_usable`) go into labeling, training, and the text length estimates.
+- **Chunk the pages,** since most are longer than the 512 tokens DeBERTa reads at once.
 - **Clean the text once, before labeling,** and keep curly quotes and en dashes, so labels match what the organizer wrote.
 - **Join the two files on `url_key`,** not on the raw link.
-- **Opportunity types:** the rule from Session 1 (fellowships with grants) will be applied at the end of the EDA.
+- **Use recent listings for automatic labels** (deadlines since September 2026 match the page far more often) and expect to hand label the rest.
+- **Flag, do not drop,** listings that look non-U.S. or the wrong type.
+- **Fellowships go with grants** (decided, not yet applied). It will be applied at the end of the EDA.
 
 ### Open items
 
 - **Gaps in the cleaner.** `normalize_text` does not remove the soft hyphen (U+00AD, 59 times in the pages), the word joiner (U+2060, 43), or the unusual spaces: narrow no-break space (U+202F, 28), thin space (U+2009, 26), and hair space. Decide whether to add them before labeling.
-- **Duplicated code.** `normalize_text`, `page_problem`, `month_from_source_url`, and `domain` are copied into the notebook and also live in `preprocess/clean.py`. `page_problem` is even defined twice in one cell. Import them from `preprocess/clean.py` so there is one version.
-- **Unanswered questions from the notebook:** are the blank fees really "not mentioned", or did the parser miss them, and why are 7 deadlines missing?
-- **Unfinished cells:** the monthly ratio of Residency/Fellowship to the other types is an empty cell, and the type conclusion ends with an empty bullet.
-- **EDA still to do:** text length, time and deadlines, duplicates, and content analysis. The noise check is only partly done.
-- **A fuller EDA exists in `notebooks/01_eda.ipynb`.** Its findings are not yet reproduced here, for example about 285 distinct opportunities among the 407 rows, 78% of usable pages longer than 512 tokens, and only 37% of deadlines found in the page text.
+- **The 7 missing deadlines** have not been investigated yet.
+- **Which cycle to keep.** For a cluster of repeated listings, decide whether to keep the newest cycle or all cycles.
+- **The fellowship and grant grouping** is decided but not applied.
+- **The keyword flags** for non-U.S. and odd types need a hand check on a sample.
+- **July 2024 is in the data twice** (two posts with 14 listings each), so that month is doubled until the duplicates are merged.
