@@ -143,3 +143,4 @@ Date: October 10, 2026. This covers the work in `notebooks/EDA+Preprocessing.ipy
 - **The fellowship and grant grouping** is decided but not applied.
 - **The keyword flags** for non-U.S. and odd types need a hand check on a sample.
 - **July 2024 is in the data twice** (two posts with 14 listings each), so that month is doubled until the duplicates are merged.
+- **Decision to make: `days_until_deadline`.** Should it be a column in the dataframe at this step, or should the platform work it out automatically when it shows a listing? A stored value is only correct on the day it was computed and goes stale, while computing it from the parsed deadline date when the app runs is always current. The notebook already has `days_notice` (deadline minus the post date), which is a different, fixed number and is fine to keep. Think about this before the app is built. Leaning towards computing it in the platform, from the parsed deadline date, so it is always current.
