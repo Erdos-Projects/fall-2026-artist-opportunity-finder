@@ -132,7 +132,7 @@ def parse_listing(paragraph):
     matches = list(DEADLINE_LABEL.finditer(body))
     if matches:
         match = matches[-1]
-        description = body[: match.start()].strip()
+        description = body[: match.start()].strip() #It is the text between the title and the "Deadline:" label. For ArtFields, that is "Southern artists: compete for $100K+ in prizes ... Fee: $25".
         deadline = match.group("deadline").strip()
     elif len(lines) >= 3 and "|" in lines[-1] and YEAR.search(lines[-1].split("|")[0]):
         description = " ".join(lines[1:-1])
@@ -194,7 +194,7 @@ def parse_post(html):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--months", type=int, default=22, help="how many monthly posts to scrape, newest first")
+    parser.add_argument("--months", type=int, default=22, help="how many monthly posts to scrape, newest first") # maybe later I'll change default to 1 - for scrapping opportunities in the current month only
     args = parser.parse_args()
 
     saved = load_saved(OUT_FILE)
