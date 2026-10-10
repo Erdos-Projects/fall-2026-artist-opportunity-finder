@@ -12,6 +12,15 @@ python-dotenv
 
 # Cleaning and inspection
 pandas
+ftfy
+dateparser
+rapidfuzz
+scikit-learn
+
+# EDA and notebooks
+matplotlib
+ipykernel
+nbformat
 
 # Labeling
 label-studio
