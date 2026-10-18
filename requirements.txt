@@ -9,6 +9,7 @@ lxml
 
 # API keys (reads .env)
 python-dotenv
+anthropic
 
 # Cleaning and inspection
 pandas
