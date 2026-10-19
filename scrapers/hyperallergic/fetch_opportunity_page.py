@@ -30,12 +30,14 @@ Usage (from the project root):
     python scrapers/hyperallergic/fetch_opportunity_page.py --apply-review     # copy CSV edits into the jsonl
     python scrapers/hyperallergic/fetch_opportunity_page.py --follow           # step C, dry run: counts the credits
     python scrapers/hyperallergic/fetch_opportunity_page.py --follow --scrape  # step C, fetches and appends
+    # --follow --scrape ignores robots.txt. SKIP_DOMAINS still applies.
 
 Each organizer has its own terms of use, and this script cannot read them.
 Run it without --scrape first, read the terms of the domains it lists, and add
 any that forbid automated access to SKIP_DOMAINS. It checks robots.txt for you.
---ignore-robots turns that check off (a deliberate choice by the project owner,
-recorded in Plans/Progress.md). SKIP_DOMAINS and the delay between pages still apply.
+--ignore-robots turns that check off for step A (a deliberate choice by the
+project owner, recorded in Plans/Progress.md). Step C (--follow --scrape)
+ignores robots.txt by default. SKIP_DOMAINS and the delay between pages still apply.
 
 Text only (no LLM extraction), 1 credit per page. Writes one line per page to
 data/raw/opportunity_pages.jsonl with these keys: source_url (the cleaned link),
@@ -47,8 +49,9 @@ Pages already saved are skipped, and Firecrawl's answers are cached in
 data/raw/_cache/organizer_pages (the organizer pages) and
 data/raw/_cache/linked_pages (the linked pages).
 
-Step C sets raw_text to the organizer page's cached text, then a blank line, then
-the linked page's text. It always starts again from the cache, so running it twice
+Step C sets raw_text to the organizer page's cached text, then a line
+--- followed page ---, then the linked page's text. It always starts again from
+the cache, so running it twice
 never adds a page twice, and changing a pick only needs --follow --scrape again.
 If an organizer page serves several listings, one link is chosen for the page and
 the LLM sees all of those listing titles.
@@ -540,19 +543,21 @@ def follow_links(limit, scrape, ignore_robots=False):
         )
     wanted = sorted({p["linked_url"] for p in pages if p.get("linked_url")})
     todo = [u for u in wanted if cache_file(u, LINKED_CACHE).exists() is False][:limit]
-    print(f"{len(wanted)} pages have a picked link, {len(todo)} not fetched yet (= {len(todo)} Firecrawl credits)")
+    print(f"{len(wanted)} unique picked URLs, {len(todo)} not fetched yet (= {len(todo)} Firecrawl credits)")
 
     if not scrape:
         print("Dry run. Add --scrape to fetch them and append the text.")
         return
 
+    if ignore_robots:
+        print("Ignoring robots.txt for followed pages. SKIP_DOMAINS still applies.")
     api_key = load_api_key()
     for n, url in enumerate(todo, 1):
         if is_skipped(url) or not (ignore_robots or allowed_by_robots(url)):
             print(f"[{n}/{len(todo)}] not allowed  {url}")
             continue
         try:
-            firecrawl_page(url, api_key, cache_file(url, LINKED_CACHE))
+            firecrawl_page(url, api_key, cache_file(url, LINKED_CACHE), delay=8)
         except requests.RequestException as error:
             print(f"[{n}/{len(todo)}] failed  {url}  ({error})")
             continue
@@ -564,7 +569,11 @@ def follow_links(limit, scrape, ignore_robots=False):
         if base is None:  # the original is gone, so leave this record alone
             continue
         linked = cached_text(page["linked_url"], LINKED_CACHE) if page.get("linked_url") else None
-        page["raw_text"] = base + "\n\n" + linked.strip() if linked and linked.strip() else base
+        page["raw_text"] = (
+            base + "\n\n--- followed page ---\n\n" + linked.strip()
+            if linked and linked.strip()
+            else base
+        )
         appended += bool(linked and linked.strip())
     save_pages(pages)
     print(f"{appended} pages now have a linked page appended to raw_text")
@@ -581,7 +590,11 @@ def main():
         help="copy linked_url and linked_reason from link_picks_review.csv into opportunity_pages.jsonl",
     )
     parser.add_argument("--follow", action="store_true", help="step C: fetch the picked links and append them (needs --scrape)")
-    parser.add_argument("--ignore-robots", action="store_true", help="do not check robots.txt (SKIP_DOMAINS still applies)")
+    parser.add_argument(
+        "--ignore-robots",
+        action="store_true",
+        help="do not check robots.txt on step A. Step C already ignores robots when --scrape is set. SKIP_DOMAINS still applies.",
+    )
     parser.add_argument("--limit", type=int, default=None, help="only handle this many pages")
     args = parser.parse_args()
 
@@ -590,7 +603,8 @@ def main():
     if args.apply_review:
         return apply_review()
     if args.follow:
-        return follow_links(args.limit, args.scrape, args.ignore_robots)
+        # Followed guidelines pages: ignore robots.txt whenever we actually fetch.
+        return follow_links(args.limit, args.scrape, ignore_robots=(args.ignore_robots or args.scrape))
 
     links = load_links()
     domains = Counter(urlparse(url).netloc.lower().removeprefix("www.") for url in links.values())
