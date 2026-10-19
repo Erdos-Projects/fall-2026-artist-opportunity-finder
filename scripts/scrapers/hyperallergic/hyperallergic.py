@@ -1,8 +1,8 @@
 """Scrape Hyperallergic's monthly "Opportunities in <Month> <Year>" posts.
 
 Usage (from the project root):
-    python scrapers/hyperallergic/hyperallergic.py              # newest 22 months
-    python scrapers/hyperallergic/hyperallergic.py --months 3   # newest 3 months
+    python scripts/scrapers/hyperallergic/hyperallergic.py              # newest 22 months
+    python scripts/scrapers/hyperallergic/hyperallergic.py --months 3   # newest 3 months
 
 Writes one line per opportunity to data/raw/hyperallergic.jsonl, using the
 record format shared by all scrapers (see common.make_record). Downloaded pages

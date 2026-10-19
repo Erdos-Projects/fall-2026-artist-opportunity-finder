@@ -15,7 +15,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 import requests
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
 CACHE_DIR = RAW_DIR / "_cache"
 
@@ -166,28 +166,43 @@ def load_api_key():
     return api_key
 
 
-def firecrawl_page(url, api_key, cache_file, use_cache=True, wait_ms=0, delay=3):
+def firecrawl_page(url, api_key, cache_file, use_cache=True, wait_ms=0, delay=3, retries=6):
     """Return Firecrawl's answer for one page: its text ("markdown") and "metadata".
 
     Text only, with no LLM extraction, so each page costs 1 credit. The answer
     is saved in cache_file, and read back from it when use_cache is True.
+    429 and 5xx responses wait and retry (Retry-After if Firecrawl sends it).
     """
     if use_cache and cache_file.exists():
         return json.loads(cache_file.read_text(encoding="utf-8"))
 
-    time.sleep(delay)
     body = {"url": url, "formats": ["markdown"], "onlyMainContent": True}
     if wait_ms:
         body["waitFor"] = wait_ms  # pages that fill in their list with JavaScript need time
     if not use_cache:
         body["maxAge"] = 0  # ask Firecrawl for a fresh copy, not one it saved earlier
-    response = requests.post(FIRECRAWL_URL, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=120)
-    response.raise_for_status()
-    data = response.json()["data"]
 
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-    cache_file.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    return data
+    wait = delay
+    last_error = None
+    for attempt in range(1, retries + 1):
+        time.sleep(wait)
+        response = requests.post(FIRECRAWL_URL, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=120)
+        if response.status_code == 429 or response.status_code >= 500:
+            last_error = requests.HTTPError(f"{response.status_code} {response.reason} for {url}", response=response)
+            retry_after = response.headers.get("Retry-After")
+            try:
+                wait = max(delay, int(retry_after)) if retry_after else min(120, delay * (2 ** attempt))
+            except ValueError:
+                wait = min(120, delay * (2 ** attempt))
+            print(f"  Firecrawl {response.status_code}, wait {wait}s then retry {attempt}/{retries}  {url}")
+            continue
+        response.raise_for_status()
+        data = response.json()["data"]
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        return data
+
+    raise last_error or requests.HTTPError(f"Firecrawl failed for {url}")
 
 
 def published_at(data):

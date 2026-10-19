@@ -12,9 +12,9 @@ through Firecrawl. Keep the volume low and never republish the saved data.
 Needs a Firecrawl API key as FIRECRAWL_API_KEY in the .env file at the project root.
 
 Usage (from the project root):
-    python scrapers/resartis_firecrawl.py --limit 5    # try 5 open calls
-    python scrapers/resartis_firecrawl.py              # all open calls on the list
-    python scrapers/resartis_firecrawl.py --us-only    # only U.S. open calls
+    python scripts/scrapers/resartis_firecrawl.py --limit 5    # try 5 open calls
+    python scripts/scrapers/resartis_firecrawl.py              # all open calls on the list
+    python scripts/scrapers/resartis_firecrawl.py --us-only    # only U.S. open calls
 
 Writes one line per open call to data/raw/resartis.jsonl, using the record
 format shared by all scrapers (see common.make_record). Firecrawl's answers are

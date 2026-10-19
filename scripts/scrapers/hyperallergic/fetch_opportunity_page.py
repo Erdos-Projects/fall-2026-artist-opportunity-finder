@@ -20,16 +20,16 @@ Step B also needs ANTHROPIC_API_KEY there, and `pip install anthropic`.
 If the key is not scoped to one workspace, add ANTHROPIC_WORKSPACE_ID too.
 
 Usage (from the project root):
-    python scrapers/hyperallergic/fetch_opportunity_page.py                    # list the domains, fetch nothing
-    python scrapers/hyperallergic/fetch_opportunity_page.py --scrape --limit 5
-    python scrapers/hyperallergic/fetch_opportunity_page.py --scrape           # step A
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py                    # list the domains, fetch nothing
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py --scrape --limit 5
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py --scrape           # step A
 
-    python scrapers/hyperallergic/fetch_opportunity_page.py --pick --limit 5   # step B
-    python scrapers/hyperallergic/fetch_opportunity_page.py --pick
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py --pick --limit 5   # step B
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py --pick
     # Review data/raw/link_picks_review.csv. Edit linked_url / linked_reason if needed.
-    python scrapers/hyperallergic/fetch_opportunity_page.py --apply-review     # copy CSV edits into the jsonl
-    python scrapers/hyperallergic/fetch_opportunity_page.py --follow           # step C, dry run: counts the credits
-    python scrapers/hyperallergic/fetch_opportunity_page.py --follow --scrape  # step C, fetches and appends
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py --apply-review     # copy CSV edits into the jsonl
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py --follow           # step C, dry run: counts the credits
+    python scripts/scrapers/hyperallergic/fetch_opportunity_page.py --follow --scrape  # step C, fetches and appends
     # --follow --scrape ignores robots.txt. SKIP_DOMAINS still applies.
 
 Each organizer has its own terms of use, and this script cannot read them.

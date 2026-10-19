@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 import ftfy
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "scrapers"))
+sys.path.insert(0, str(ROOT / "scripts" / "scrapers"))
 from common import url_key  # noqa: E402
 
 MONTHS = {m: i for i, m in enumerate(

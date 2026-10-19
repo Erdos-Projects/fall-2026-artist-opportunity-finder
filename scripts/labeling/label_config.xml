@@ -1,0 +1,11 @@
+<View>
+  <Header value="$title"/>
+  <Labels name="label" toName="text">
+    <Label value="deadline" background="#d9534f" hotkey="1"/>
+    <Label value="fee" background="#f0ad4e" hotkey="2"/>
+    <Label value="career_stage" background="#5cb85c" hotkey="3"/>
+    <Label value="location" background="#5bc0de" hotkey="4"/>
+    <Label value="medium" background="#9b59b6" hotkey="5"/>
+  </Labels>
+  <Text name="text" value="$text" valueType="text" granularity="symbol"/>
+</View>
