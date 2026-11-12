@@ -5,28 +5,62 @@ Team project: fall-2026-artist-opportunity-finder
 Artist Opportunity Finder helps visual and media artists find grants, exhibition
 open calls, and residencies that fit their work, instead of hunting across dozens
 of inconsistent listing sites, PDFs, and newsletters. It is an 8-week, end-to-end
-deep learning project covering data collection, labeling, fine-tuning, evaluation,
-and a small deployed app. The current scope is U.S.-based opportunities.
+deep learning course project covering data collection, labeling, fine-tuning,
+evaluation, and a local demo app. The scope is U.S.-based opportunities, and the
+data comes from one source, Hyperallergic's monthly opportunity posts.
 
-## How it works
+For a two-page summary of what we built and how it scored against our targets,
+read the [Executive Summary](docs/executive_summary.md) (also as
+[.docx](docs/executive_summary.docx)).
 
-The system has three components, each measured against a simple baseline before
-any fine-tuning.
+## What was built
 
-| Component | What it does | Baseline | Model |
+Each component is measured against a simple baseline.
+
+| Component | What it does | Baseline | Model | Status |
+|---|---|---|---|---|
+| Field extraction | Pulls deadline, entry fee, career stage, location, and medium out of messy listing text | Regex and rules | Fine-tuned RoBERTa-base token classifier (BIO span tagging), compared with DeBERTa-v3-base and with an LLM | Done |
+| Matching and ranking | Filters listings by the extracted fields, then ranks them against an artist's profile | BM25 | Pretrained sentence embeddings (all-MiniLM-L6-v2), not fine-tuned | Done, directional |
+| Quality classification | Would label listings as legitimate, low value, or high risk | Rules | Text classifier | Not built |
+
+## Results
+
+Extraction, scored once on 33 hand-labeled ("gold") listings with 183 labeled
+spans (exact-match F1):
+
+| Field | Regex | Fine-tuned | LLM (claude-opus-5-5, no training) |
 |---|---|---|---|
-| Field extraction | Pulls deadline, entry fee, award, eligibility, medium, and opportunity type out of messy listing text | Regex and rules | Fine-tuned DeBERTa-v3 token classifier (BIO span tagging) |
-| Matching and ranking | Ranks listings against an artist's profile | BM25 with hard eligibility and deadline filters | Fine-tuned bi-encoder, optional cross-encoder reranker |
-| Quality classification | Labels listings as legitimate, low value, or high risk | Rules (fee threshold, no named jurors, no stated prize) | Fine-tuned text classifier, plus XGBoost on structured features |
+| All fields (micro) | 0.19 | **0.41** | 0.40 |
+| Deadline | 0.70 | 0.72 | 0.88 |
+| Fee (6 spans only) | 0.55 | 0.67 | 1.00 |
+| Career stage | 0.08 | 0.33 | 0.28 |
+| Location | 0.05 | 0.09 | 0.20 |
+| Medium | 0.17 | 0.36 | 0.26 |
+
+- The fine-tuned model more than doubles the regex baseline and ties the LLM
+  overall. Our 0.85 micro F1 target was not met.
+- The LLM costs about $49 per 1,000 listings and 4.3 seconds per call. The
+  fine-tuned model takes about 0.1 seconds per listing on a GPU (estimated) and
+  has no per-call fee.
+- None of the 280 spans the model predicted was unsupported, because a tagger
+  can only point at text on the page.
+- Matching (15 artist profiles, ratings from an LLM judge): BM25 precision@10
+  0.33 and NDCG@10 0.52, embeddings 0.36 and 0.51. They tie within noise, and
+  the targets (NDCG 20% above BM25, precision@10 0.60) were not met.
+- The test set is small and was labeled by one person, so differences of a few
+  points are noise. A hybrid (LLM for deadline and fee, fine-tuned model for
+  medium and career stage) is an idea to test on new data, not a result.
+
+More detail is in [docs/results/](docs/results/) and in the labeling rules in
+[docs/gold_labeling_guide.md](docs/gold_labeling_guide.md).
 
 ## Why fine-tune instead of prompting an LLM
 
 A span-tagging model can only point at text that exists in the listing, so it
 cannot invent a deadline or a fee the way a generative model can. It is also
-cheaper, faster, and deterministic at scale. The final design is a hybrid: the
-fine-tuned model handles routine fields, and an LLM handles reasoning-heavy or
-low-confidence cases through a router. Results are reported for the baseline,
-the fine-tuned model, the LLM, and the hybrid.
+cheaper and faster at scale. On our test it matched the LLM overall but was
+weaker on deadlines and fees, so the case for it rests on cost, speed, and
+not making values up, not on accuracy.
 
 ## Getting started
 
@@ -88,7 +122,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## Building the datasets
 
-Each source has its own scraper in `scrapers/`. Run them from the project folder
+Each source has its own scraper in `scripts/scrapers/`. Run them from the project folder
 with the environment active (see Getting started).
 
 ### Hyperallergic
@@ -98,8 +132,8 @@ first. Both write to `data/raw/`.
 
 | Step | Script | Writes | One line per |
 |---|---|---|---|
-| 1. Listings | `scrapers/hyperallergic/hyperallergic.py` | `hyperallergic.jsonl` | Opportunity |
-| 2. Opportunity pages | `scrapers/hyperallergic/fetch_opportunity_page.py` | `opportunity_pages.jsonl` | Linked page |
+| 1. Listings | `scripts/scrapers/hyperallergic/hyperallergic.py` | `hyperallergic.jsonl` | Opportunity |
+| 2. Opportunity pages | `scripts/scrapers/hyperallergic/fetch_opportunity_page.py` | `opportunity_pages.jsonl` | Linked page |
 
 **Step 1: the listings.** Hyperallergic publishes a monthly "Opportunities in
 <Month> <Year>" post. This scraper reads the newest 30 of them and saves one line
@@ -110,13 +144,13 @@ cleaned of tracking labels, and it usually points to the organizer's own page.
 Windows (PowerShell):
 
 ```powershell
-.venv\Scripts\python.exe scrapers\hyperallergic\hyperallergic.py --months 30
+.venv\Scripts\python.exe scripts\scrapers\hyperallergic\hyperallergic.py --months 30
 ```
 
 Linux or macOS:
 
 ```bash
-.venv/bin/python scrapers/hyperallergic/hyperallergic.py --months 30
+.venv/bin/python scripts/scrapers/hyperallergic/hyperallergic.py --months 30
 ```
 
 Downloaded pages are cached in `data/raw/_cache/hyperallergic`, and months that
@@ -142,7 +176,7 @@ Run Step 1 first. Then run the script without `--scrape` to list the domains it
 would visit. This makes no requests and uses no credits.
 
 ```powershell
-.venv\Scripts\python.exe scrapers\hyperallergic\fetch_opportunity_page.py
+.venv\Scripts\python.exe scripts\scrapers\hyperallergic\fetch_opportunity_page.py
 ```
 
 Each organizer has its own terms of use, which the script cannot read. Read the
@@ -151,8 +185,8 @@ access to `SKIP_DOMAINS` in the script. It checks robots.txt for you. Then fetch
 a few pages to check the result, and then all of them:
 
 ```powershell
-.venv\Scripts\python.exe scrapers\hyperallergic\fetch_opportunity_page.py --scrape --limit 5
-.venv\Scripts\python.exe scrapers\hyperallergic\fetch_opportunity_page.py --scrape
+.venv\Scripts\python.exe scripts\scrapers\hyperallergic\fetch_opportunity_page.py --scrape --limit 5
+.venv\Scripts\python.exe scripts\scrapers\hyperallergic\fetch_opportunity_page.py --scrape
 ```
 
 On Linux or macOS, use `.venv/bin/python` and forward slashes. Each page costs
@@ -169,14 +203,14 @@ opportunity_pages.jsonl source_url  (page: raw_text)
 
 Links to the same page can differ in small ways, such as `http` against `https`,
 `www.`, or a trailing slash, so do not compare them as plain text. Run both sides
-through `url_key` from `scrapers/common.py`, which gives the same key for the same
+through `url_key` from `scripts/scrapers/common.py`, which gives the same key for the same
 page:
 
 ```python
 import sys
 import pandas as pd
 
-sys.path.insert(0, "scrapers")
+sys.path.insert(0, "scripts/scrapers")
 from common import url_key
 
 listings = pd.read_json("data/raw/hyperallergic.jsonl", lines=True)
@@ -193,22 +227,57 @@ searched for in the page text to help create labels.
 
 The data stays on your machine. Do not republish it.
 
-## Repository layout (planned)
+## From listings to results
+
+After the datasets are built, the project runs in this order.
+
+1. **Clean.** `preprocess/clean.py` and `notebooks/EDA+Preprocessing.ipynb`
+   remove menus and dead pages, merge repeat postings, and split by organizer.
+2. **Chunk.** `scripts/labeling/chunk_pages.py` cuts pages into windows.
+3. **Silver labels.** `scripts/labeling/make_silver.py` combines regex, distant
+   (listing fields matched back to the page), and LLM labels. The LLM step needs
+   `ANTHROPIC_API_KEY` in `.env`.
+4. **Gold labels.** `scripts/labeling/make_gold_tasks.py` makes tasks for
+   Label Studio, and `build_gold_tokens.py` turns the export into token labels.
+   The rules are in [docs/gold_labeling_guide.md](docs/gold_labeling_guide.md).
+5. **Train.** `notebooks/finetune_models.ipynb` fine-tunes the models in Google
+   Colab on a GPU. Model weights are not checked in.
+6. **Evaluate.** `models/extraction/` holds the regex baseline, the decoder,
+   scoring (`evaluate.py`), the LLM comparison (`llm_gold.py`), and error
+   analysis. Results are written to `docs/results/`.
+7. **Match.** `models/matching/` holds the filters, BM25 and embedding rankers,
+   and the evaluation against LLM-rated pairs.
+
+## Demo app
+
+A local Streamlit app takes a short description of your practice, filters out
+listings that clearly exclude you, ranks the rest, and shows each opportunity
+with its extracted deadline, fee, and eligibility. It needs the listing data and
+extraction output, which are not in the repository.
+
+```powershell
+.venv\Scripts\streamlit.exe run app\streamlit_app.py
+```
+
+## Repository layout
 
 ```
 /data        raw, clean, and labeled listings (not checked in)
-/scripts     environment setup scripts
-/scrapers    one module per source
-/labeling    labeling guide, Label Studio config, pre-label scripts
-/models      extraction, quality, and matching components
-/api         FastAPI backend (extract, classify, rank)
-/app         Streamlit or Gradio front end
-/notebooks   Colab experiments
-/docs        proposal, writeups, comparison tables
+/scripts     setup scripts, one scraper per source, and the labeling scripts
+/preprocess  cleaning code
+/models      extraction (baseline, decoding, scoring) and matching (filters, rankers)
+/app         Streamlit demo
+/notebooks   EDA and the Colab fine-tuning notebook
+/docs        executive summary, labeling guide, results, figures
+/Plans       project plans and the running progress log
 ```
 
 ## Status
 
-Early setup. Data collection and labeling come first (weeks 1 to 3), followed by
-models, evaluation, and deployment. See [CLAUDE.md](CLAUDE.md) for the full
-project guide, timeline, and KPIs.
+The project timeline has ended. Extraction and matching are built and
+evaluated; the quality classifier, a fine-tuned matching model, more data
+sources, and a deployed app were out of scope in the end. See
+[Plans/Progress.md](Plans/Progress.md) for the decision log and
+[Plans/CLAUDE.md](Plans/CLAUDE.md) for the original project guide and KPIs.
+
+Authors: Palak Arora, Viacheslav Ivanov.
