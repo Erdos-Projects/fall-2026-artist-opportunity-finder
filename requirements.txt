@@ -23,5 +23,13 @@ matplotlib
 ipykernel
 nbformat
 
+# Matching (Component 3). For a smaller download on Windows/CPU, install torch first:
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+rank_bm25
+sentence-transformers
+
 # Labeling
 label-studio
+
+# Demo app
+streamlit
